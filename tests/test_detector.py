@@ -136,3 +136,20 @@ def test_matches_brute_force_on_random_graphs(detect):
         assert sorted((c.nodes, c.formed_at) for c in report.cycles) == expected, seed
         total += len(expected)
     assert total >= 10  # the seeds above produce cycles of 2-4 processes
+
+
+def test_realistic_log_matches_ground_truth(detect, tmp_path):
+    from generate_realistic_log import generate as generate_realistic
+
+    path = tmp_path / "realistic.log"
+    with open(path, "w") as f:
+        truth = generate_realistic(lines=4000, out=f, days=3, seed=7, cluster_rate=0.05)
+    assert set(truth["cluster_kinds"]) == {"single", "hub", "theta"}  # every shape is exercised
+
+    report = detect(path)
+    assert (report.processes, report.resources, report.edges) == (
+        truth["processes"], truth["resources"], truth["edges"])
+    assert sorted((list(c.nodes), c.formed_at) for c in report.cycles) == sorted(map(tuple, truth["cycle_list"]))
+    assert report.candidate_processes == truth["candidate_processes"]  # feeders and tails pruned, bridges kept
+    assert len(report.deadlocked_processes) == truth["deadlocked_processes"]
+    assert [tuple(d) for d in report.deadlocks_per_day] == [tuple(d) for d in truth["deadlocks_per_day"]]
