@@ -1,0 +1,47 @@
+# A Spark standalone cluster on one machine: 1 master, 2 workers, 1 driver.
+#   docker compose up -d --build spark-master spark-worker-1 spark-worker-2
+#   docker compose run --rm driver deadlock-detector /data/real_2m.log --engine df -c 8 --master spark://spark-master:7077
+#   docker compose down
+# Every container sees ./data/generated at /data: there is no shared file system,
+# so each executor must find the log at the same path.
+x-spark: &spark
+  build:
+    context: .
+    dockerfile: docker/Dockerfile
+  image: deadlock-detector-spark:3.4.1
+  volumes:
+    - ./data/generated:/data:ro
+
+services:
+  spark-master:
+    <<: *spark
+    hostname: spark-master
+    command: spark-class org.apache.spark.deploy.master.Master --host spark-master --port 7077 --webui-port 8080
+    ports: ["8080:8080"]
+
+  spark-worker-1: &worker
+    <<: *spark
+    hostname: spark-worker-1
+    command: spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077 --cores 4 --memory 3g
+    depends_on: [spark-master]
+
+  spark-worker-2:
+    <<: *worker
+    hostname: spark-worker-2
+
+  driver:
+    <<: *spark
+    hostname: driver
+    profiles: ["driver"]   # only started by `docker compose run`
+    working_dir: /repo
+    environment:
+      # benchmark.py records the commit; the repo is owned by the host user, and
+      # git must not rewrite the host's index from inside the container
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: /repo
+      GIT_OPTIONAL_LOCKS: "0"
+    volumes:
+      - ./data/generated:/data:ro
+      - .:/repo
+    depends_on: [spark-worker-1, spark-worker-2]

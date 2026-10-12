@@ -20,7 +20,8 @@ def parse_args(argv=None):
     p.add_argument("--engine", choices=("rdd", "df"), default="rdd",
                    help="RDD pipeline or DataFrame / Spark SQL pipeline (default: rdd)")
     p.add_argument("-c", "--cores", type=int, default=os.cpu_count(), help="local Spark cores (default: all)")
-    p.add_argument("--partitions", type=int, help="RDD partitions (default: 2 x cores)")
+    p.add_argument("--master", help="Spark master URL, e.g. spark://host:7077 (default: local[cores])")
+    p.add_argument("--partitions", type=int, help="shuffle partitions (default: 2 x cores)")
     p.add_argument("--max-cycle-length", type=int, default=13, metavar="N",
                    help="longest cycle to search for, in processes (default: 13)")
     p.add_argument("--max-paths", type=int, default=200_000,
@@ -72,7 +73,7 @@ def main(argv=None):
         sys.exit(f"error: {args.log} not found")
 
     start = time.perf_counter()
-    spark = create_spark(args.cores, args.driver_memory)
+    spark = create_spark(args.cores, args.driver_memory, args.master)
     try:
         if args.engine == "df":
             run, target = detect_deadlocks_df, spark

@@ -31,14 +31,15 @@ class Report:
     timings: dict = field(default_factory=dict)
 
 
-def create_spark(cores, driver_memory="4g"):
+def create_spark(cores, driver_memory="4g", master=None):
+    """A SparkSession on local[cores], or on `master` (e.g. spark://host:7077) if given."""
     # Python workers must run the same interpreter (and see the same packages)
     # as the driver, otherwise they fall back to whatever `python3` is on PATH.
     os.environ.setdefault("PYSPARK_PYTHON", sys.executable)
     os.environ.setdefault("PYSPARK_DRIVER_PYTHON", sys.executable)
     spark = (
         SparkSession.builder.appName("deadlock-detector")
-        .master(f"local[{cores}]")
+        .master(master or f"local[{cores}]")
         .config("spark.driver.memory", driver_memory)
         .config("spark.ui.showConsoleProgress", "false")
         .getOrCreate()
