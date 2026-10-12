@@ -116,6 +116,15 @@ python scripts/benchmark.py spark-df data/generated/real_2m.log --cores 8 --runs
 pytest                                                  # about 3.5 min, mostly Spark start-up
 ```
 
+**On a Spark standalone cluster** (Docker Compose: 1 master and 2 workers, 4 cores each, all on one machine):
+
+```bash
+cp data/sample.log data/generated/          # every container sees data/generated at /data
+docker compose up -d --build                # master UI on :8080
+docker compose exec driver deadlock-detector /data/sample.log --engine df -c 8 --master spark://spark-master:7077
+docker compose down
+```
+
 ```
 $ deadlock-detector data/sample.log
 Deadlocks: 3 cycle(s)
@@ -129,6 +138,7 @@ Deadlocks: 3 cycle(s)
 |---|---|---|
 | `--engine` | `rdd` | `rdd` or `df` (DataFrames / Spark SQL) |
 | `-c, --cores` | all | local Spark cores |
+| `--master` | `local[cores]` | Spark master URL, e.g. `spark://spark-master:7077` |
 | `--partitions` | 2 × cores | shuffle partitions |
 | `--max-cycle-length` | 13 | longest cycle searched for, in processes |
 | `--max-paths` | 200000 | stop the search if more open paths remain |

@@ -78,7 +78,7 @@ Each fork has a recommended option. Until a fork is decided, the recommendation 
 | F2 | Benchmark workload | **Decided — D9** | |
 | F3 | DataFrame rewrite scope | **Decided — D11** | |
 | F4 | Frontier join strategy | **Decided — D12** | |
-| F5 | Cluster run | **(a) Docker Compose: 1 master + 2 workers, `spark-submit --py-files`** · (b) skip — local mode only | Shows the code is not tied to `local[N]`. All containers share one host, and that must be stated. **Cut for now** (first in the cut order; Docker is not installed in WSL) |
+| F5 | Cluster run | **Decided — D14** | |
 | F6 | CI | **Decided — D13** | |
 
 ---
@@ -217,6 +217,22 @@ Catalyst separately reused the survivor-set exchange for both semi-joins (`Reuse
 **Adopted by default, 12 Oct 2026.** GitHub Actions on Ubuntu, Temurin Java 17, Python 3.12,
 `pip install -e .[dev]`, `pytest`. **Rejected:** a Python × Java matrix, which costs CI minutes to
 test combinations nobody runs.
+
+### D14 — a Docker Compose standalone cluster on one machine (fork F5)
+**Adopted by default, 12 Oct 2026.** `docker-compose.yml`, `docker/Dockerfile`.
+
+| Choice | Instead of | Why / cost |
+|---|---|---|
+| Own image: `python:3.12-slim` + OpenJDK 17 + `pip install` of this package | `apache/spark:3.4.1` | The official image ships Python 3.8, and the driver and executors must run the same Python minor version. Cost: the image is rebuilt whenever `src/` changes |
+| Package baked into the image | `spark-submit --py-files` | RDD lambdas are unpickled on the workers, so they must import `deadlock_detector`. Baking it in is one less moving part. Cost: the image must be rebuilt per commit |
+| The CLI connects with `--master spark://spark-master:7077` from a driver container (client mode) | `spark-submit` in cluster mode | Same entry point as local runs, so the benchmark harness is unchanged. The driver's report prints where it ran |
+| Logs bind-mounted at `/data` in every container | HDFS / object storage | No shared file system exists, so every executor must find the file at the same path. Cost: reads are local disk, so remote-read cost is not measured |
+| 2 workers × 4 cores × 3 GB (executors 2 GB) | 1 large worker | Two JVMs, so shuffles really cross executor processes, over the Docker bridge network. Total cores (8) match the `local[8]` runs for comparison |
+
+**What this proves and what it does not:** the code is not tied to `local[N]`. Executors are
+separate JVMs in separate containers, shuffles go over a network socket, and tasks are
+scheduled by a standalone master. It is **not** multi-machine: every container shares one CPU,
+one memory bus and one disk, so it cannot show horizontal scaling.
 
 ---
 
