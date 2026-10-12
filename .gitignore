@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# Generated benchmark logs (recreate with scripts/generate_benchmark_logs.sh)
+data/generated/
+
+# Run outputs
+*.json
+spark-warehouse/
+metastore_db/
+derby.log
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+*:Zone.Identifier

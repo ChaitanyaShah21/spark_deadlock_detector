@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "deadlock-detector"
+version = "1.0.0"
+description = "Distributed deadlock detection over resource-allocation logs with Apache Spark"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = ["pyspark==3.4.1"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+deadlock-detector = "deadlock_detector.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
