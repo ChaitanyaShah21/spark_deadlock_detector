@@ -105,12 +105,13 @@ They also compare the Spark output, cycles and formation times included, against
 
 End-to-end wall time, including Spark startup, with `local[4]` on an 8-core ARM64 laptop (WSL2, 11 GB RAM).
 The "original" column is the first version of this code, before the rewrite described below. Both versions find the same cycles.
+Current: median of 3 runs. Original: 1 run. Method and raw runs are in [BENCHMARKS.md](BENCHMARKS.md).
 
 | Log lines | Deadlocks | Original | Current | Speedup |
 |---:|---:|---:|---:|---:|
-| 5,247 | 249 | 69.6 s | 35.7 s | 2.0× |
-| 52,497 | 2,499 | 95.3 s | 40.9 s | 2.3× |
-| 209,997 | 9,999 | 221.3 s | 55.7 s | 4.0× |
+| 5,247 | 249 | 69.6 s | 36.8 s | 1.9× |
+| 52,497 | 2,499 | 95.3 s | 41.7 s | 2.3× |
+| 209,997 | 9,999 | 221.3 s | 51.6 s | 4.3× |
 
 What changed:
 - **Exact pruning** replaced a connected-components heuristic. That heuristic stopped after 10 label-propagation rounds and could miss cycle members in long chains.
@@ -120,6 +121,10 @@ What changed:
 - **Unused diagnostic jobs removed.**
 
 **Limits.** At these sizes, fixed per-round Spark overhead dominates: the search needs one shuffle round per hop of the longest cycle. Run time therefore grows slowly with input size, and more cores do not help on small logs. The 5k log runs faster on 2 cores than on 8.
+
+## Design
+
+Decisions, rejected alternatives and the planned upgrades are in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Layout
 
