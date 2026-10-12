@@ -208,6 +208,10 @@ join when one side is below `spark.sql.autoBroadcastJoinThreshold` (10 MB), and 
 small shuffle partitions. **Rejected:** a manual `broadcast()` hint on the frontier. It would need
 a size estimate that the engine already has at run time, and a wrong hint on a large frontier
 broadcasts a large table to every executor.
+**Observed (12 Oct, 2M-line log, final adaptive plan of one pruning round):** AQE chose no
+broadcast. Every join stayed a sort-merge join, because the survivor set exceeds the 10 MB
+threshold. AQE's visible effect was coalescing shuffle partitions (`AQEShuffleRead coalesced`).
+Catalyst separately reused the survivor-set exchange for both semi-joins (`ReusedExchange`).
 
 ### D13 — CI is one configuration (fork F6)
 **Adopted by default, 12 Oct 2026.** GitHub Actions on Ubuntu, Temurin Java 17, Python 3.12,

@@ -219,8 +219,12 @@ Figure: `docs/figures/size_sweep_{light,dark}.png`.
 **Reading:**
 - **Pruning is where the rewrite pays.** Each RDD round pickles every edge out to a Python
   worker for each `map`, then back into the JVM for each shuffle. The DataFrame rounds are
-  `left_semi` joins on JVM rows, and AQE broadcasts the shrinking survivor set rather than
-  shuffling it. The search gains less, because its frontier is small (at most 108k paths).
+  `left_semi` sort-merge joins on JVM rows, with whole-stage code generation. **Checked:** the
+  final AQE plan of one pruning round on the 2M-line log (`queryExecution().executedPlan()` after
+  executing it) contains **no broadcast joins**, because the survivor set is above the 10 MB
+  threshold. AQE only coalesced shuffle partitions, and Catalyst reused the survivor-set exchange
+  for both semi-joins. The gain is therefore JVM execution, not a change of join strategy. The
+  search gains less, because its frontier is small (at most 108k paths).
 - **The build stage barely moved.** Reading and splitting 936 MB of text, then a group-by over
   19M edges, costs about the same in either API. The SQL parser is not faster than Python's
   `split` by enough to matter against the I/O and the shuffle.
