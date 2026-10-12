@@ -24,6 +24,10 @@ Every number carries its method and the commit it was measured at. Estimates are
 |---|---|---|---|---|
 | End-to-end runtime, 210k-line log, 9,999 deadlocks | **51.2 s** | 216.9 s | `adc1e9f` | §1 |
 | Speedup over the original implementation | **4.2×** at 210k lines, 2.1× at 5k | — | `adc1e9f` | §1 |
+| 20M-line log (936 MB, 59,047 deadlocks), DataFrame engine, 8 cores | **170.8 s** | 374.4 s (RDD engine) | `b1806a4` / `f176358` | §5 |
+| DataFrame engine vs RDD engine | **2.2× faster** at every size, 0.2M–20M lines | — | `b1806a4` | §5 |
+| Single process (networkx) on the same 20M log | **out of memory** at 8.8 GB; 107.5 s at 6M vs 71.5 s for the DataFrame engine | — | `0764bab` | §3 |
+| Strong scaling, 1 → 8 cores, 6M lines, RDD | **3.9×** (564.7 s → 144.9 s) | — | `b1806a4` / `f176358` | §4 |
 
 ---
 
@@ -160,14 +164,68 @@ held about 3M edges: the build stage alone went from 59 s to 322 s, and the runs
 That is memory pressure (spill and garbage collection) from oversized partitions, not a
 parallelism effect. See error log E8. The fixed-partition re-run is below.
 
-## Curves to produce in phase 1
+**Re-run with partitions fixed at 16** (commit `b1806a4`; the 8-core row is the §3 run, which
+already used 16 partitions). Figure: `docs/figures/core_sweep_{light,dark}.png`.
 
-| Curve | Why it earns its place |
-|---|---|
-| Runtime vs log size (0.2M → 2M → 20M lines), Spark vs single-process networkx | Finds the crossover point — the answer to "why Spark?" |
-| Runtime vs cores (1/2/4/8) at the largest size | Strong scaling: whether the parallelism is real |
-| Stage split (RAG / prune / search) vs size | Shows which stage becomes the bottleneck |
-| RDD engine vs DataFrame engine (phase 3) | Justifies the rewrite with a number |
+| Cores | Median | Runs | Build / prune / search | Speedup vs 1 core |
+|---:|---:|---|---|---:|
+| 1 | 564.7 s | 564.7 / 561.0 / 566.4 | 120.7 / 257.5 / 178.2 | 1.0× |
+| 2 | 294.2 s | 294.2 / 288.9 / 295.8 | 62.1 / 132.4 / 90.9 | 1.9× |
+| 4 | 178.5 s | 178.5 / 179.0 / 173.4 | 38.3 / 78.9 / 52.9 | 3.2× |
+| 8 | 144.9 s | 146.0 / 143.6 / 144.9 | 30.6 / 63.6 / 41.6 | 3.9× |
+
+**Reading:** near-linear to 2 cores, then flattening; 4 → 8 cores buys only 1.23×. The 1-core
+time is now stable (spread under 1%), which confirms that the first sweep's spread came from the
+2-partition configuration.
+
+**Why it flattens:**
+- **The driver-side loop is serial.** 6 pruning rounds and 27 search hops run one after another,
+  each as several Spark jobs with a scheduling floor that more cores cannot shrink. Fitting
+  Amdahl's law to the 8-core point gives a serial fraction of about 15% (`ESTIMATE`, a curve
+  fit, not a measurement).
+- **8 cores means 8 Python worker processes**, plus the JVM, sharing one memory bus and 11 GB of RAM.
+- **16 partitions on 8 cores** is only 2 waves of tasks, so a straggler task holds up the whole stage.
+
+The DataFrame engine was not core-swept; that is listed under "not yet measured".
+
+---
+
+## §5 · DataFrame engine vs RDD engine
+
+**Question this answers:** what did rewriting in DataFrames / Spark SQL buy (D11, D12)?
+
+**Method:** as §3, 8 cores, 16 shuffle partitions (AQE on), same logs, median of 3, every run
+exact against ground truth. **Commits:** DataFrame `b1806a4`, RDD `f176358`; `src/` is identical
+between them (`git diff f176358 b1806a4 -- src` is empty). The `-dirty`
+suffixes come from docs and harness edits only; `git diff b1806a4 90d63dc -- src` is empty.
+Figure: `docs/figures/size_sweep_{light,dark}.png`.
+
+| Log lines | RDD | DataFrame | DataFrame runs | Speedup | networkx |
+|---:|---:|---:|---|---:|---:|
+| 0.2M | 62.5 s | 27.5 s | 27.5 / 28.2 / 27.4 | 2.3× | **2.5 s** |
+| 0.6M | 67.1 s | 30.1 s | 32.6 / 30.1 / 30.1 | 2.2× | **8.1 s** |
+| 2M | 87.3 s | 43.8 s | 46.0 / 43.2 / 43.8 | 2.0× | **30.1 s** |
+| 6M | 144.9 s | **71.5 s** | 69.5 / 71.5 / 72.9 | 2.0× | 107.5 s |
+| 20M | 374.4 s | **170.8 s** | 170.8 / 169.1 / 170.8 | 2.2× | out of memory |
+
+**Per stage at 20M lines (median):**
+
+| Stage | RDD | DataFrame | Speedup |
+|---|---:|---:|---:|
+| Build RAG (read 936 MB, parse, deduplicate) | 91.9 s | 86.3 s | 1.1× |
+| Prune (6 rounds) | 197.2 s | 47.4 s | **4.2×** |
+| Cycle search (27 hops) | 73.4 s | 27.0 s | 2.7× |
+
+**Reading:**
+- **Pruning is where the rewrite pays.** Each RDD round pickles every edge out to a Python
+  worker for each `map`, then back into the JVM for each shuffle. The DataFrame rounds are
+  `left_semi` joins on JVM rows, and AQE broadcasts the shrinking survivor set rather than
+  shuffling it. The search gains less, because its frontier is small (at most 108k paths).
+- **The build stage barely moved.** Reading and splitting 936 MB of text, then a group-by over
+  19M edges, costs about the same in either API. The SQL parser is not faster than Python's
+  `split` by enough to matter against the I/O and the shuffle.
+- **With the DataFrame engine, Spark overtakes the single process between 2M and 6M lines**
+  (1.5× faster at 6M), not only by surviving at 20M. The RDD engine never overtook it on speed.
 
 ---
 
@@ -175,6 +233,8 @@ parallelism effect. See error log E8. The fixed-partition re-run is below.
 
 | Not measured | Why not | Expectation |
 |---|---|---|
-| Single-machine baseline | Phase 1 | `ESTIMATE`: networkx finishes the 210k log in a few seconds, beating Spark well past this size |
-| Anything on a real cluster | No Docker yet (phase 4) | More cost per shuffle than local mode |
-| Memory use | Not instrumented | Driver-side `collect` of cycles is the first risk at scale |
+| A lean single-process baseline (integer ids, `scipy.sparse.csgraph`) | Not scheduled (`DEFENCE.md` weak spot) | `ESTIMATE`: 5–10× less memory than networkx; would likely fit 20M lines and beat Spark there on one laptop |
+| Core sweep for the DataFrame engine | Time | Better scaling than RDD (no Python workers), still limited by the serial driver loop |
+| AQE off vs on, broadcast vs shuffle join | Not isolated | The §5 gain mixes JVM execution, Catalyst and AQE; it is not attributed to any one of them |
+| Anything on a real cluster | No Docker in WSL (phase 4 cut) | More cost per shuffle than local mode |
+| Spark's memory use | `/usr/bin/time` sees only the Python driver, not the JVM | Bounded per partition; spills to disk |
