@@ -153,3 +153,15 @@ def test_realistic_log_matches_ground_truth(detect, tmp_path):
     assert report.candidate_processes == truth["candidate_processes"]  # feeders and tails pruned, bridges kept
     assert len(report.deadlocked_processes) == truth["deadlocked_processes"]
     assert [tuple(d) for d in report.deadlocks_per_day] == [tuple(d) for d in truth["deadlocks_per_day"]]
+
+
+def test_partition_count_stays_fixed_across_pruning_rounds(sc):
+    # Regression guard for E2: without explicit counts, each join's output has as
+    # many partitions as both inputs combined, compounding every round.
+    from deadlock_detector.graph import prune_acyclic
+
+    chain = [(f"P{i}", f"P{i + 1}") for i in range(10)] + [("P10", "P11"), ("P11", "P10")]
+    live, rounds = prune_acyclic(sc.parallelize(chain, 3), partitions=4)
+    assert rounds > 2
+    assert live.getNumPartitions() == 4
+    assert sorted(live.collect()) == [("P10", "P11"), ("P11", "P10")]

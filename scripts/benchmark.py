@@ -24,7 +24,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BIN = Path(sys.executable).parent
 FIELDS = ["date", "commit", "engine", "log", "lines", "cores", "run", "status", "wall_s", "peak_mb",
-          "build_s", "prune_s", "search_s", "cycles", "correct"]
+          "build_s", "prune_s", "search_s", "cycles", "correct", "partitions"]
 
 
 def commit():
@@ -40,7 +40,7 @@ def command(engine, log, out, args):
         # fail with MemoryError instead of driving the machine into swap
         return ["prlimit", f"--as={args.mem_limit_gb << 30}", "--"] + cmd
     return [str(BIN / "deadlock-detector"), log, "--engine", "df" if engine == "spark-df" else "rdd", "-c", str(args.cores), "--max-paths", str(args.max_paths),
-            "--driver-memory", args.driver_memory, "--json", out]
+            "--partitions", str(args.partitions), "--driver-memory", args.driver_memory, "--json", out]
 
 
 def stages(engine, result):
@@ -63,6 +63,7 @@ def main():
     ap.add_argument("engine", choices=("spark", "spark-df", "baseline"))
     ap.add_argument("log")
     ap.add_argument("--cores", type=int, default=4)
+    ap.add_argument("--partitions", type=int, help="shuffle partitions (default: 2 x cores)")
     ap.add_argument("--runs", type=int, default=3)
     ap.add_argument("--max-paths", type=int, default=10_000_000)
     ap.add_argument("--driver-memory", default="6g")
@@ -71,6 +72,7 @@ def main():
     args = ap.parse_args()
 
     truth = json.load(open(args.log + ".truth.json"))
+    args.partitions = args.partitions or 2 * args.cores
     env = {**os.environ, "JAVA_HOME": os.environ.get("JAVA_HOME", "/usr/lib/jvm/java-17-openjdk-arm64")}
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     new = not Path(args.out).exists()
@@ -91,7 +93,8 @@ def main():
                 row = {"date": time.strftime("%Y-%m-%d %H:%M"), "commit": sha, "engine": args.engine,
                        "log": Path(args.log).name, "lines": truth["lines"],
                        "cores": args.cores if args.engine == "spark" else 1, "run": run,
-                       "wall_s": f"{wall:.1f}", "peak_mb": f"{peak_mb:.0f}" if args.engine == "baseline" else ""}
+                       "wall_s": f"{wall:.1f}", "peak_mb": f"{peak_mb:.0f}" if args.engine == "baseline" else "",
+                       "partitions": "" if args.engine == "baseline" else args.partitions}
                 if proc.returncode == 0 and os.path.exists(out):
                     result = json.load(open(out))
                     build, prune, search = stages(args.engine, result)

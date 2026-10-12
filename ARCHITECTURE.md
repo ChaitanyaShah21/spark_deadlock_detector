@@ -74,12 +74,12 @@ Each fork has a recommended option. Until a fork is decided, the recommendation 
 
 | # | Fork | Options (recommended first) | Why it matters |
 |---|---|---|---|
-| F1 | Single-machine baseline to compare Spark against | **(a) `networkx` SCC + `simple_cycles` in one Python process** · (b) a hand-written DFS · (c) the same code in `local[1]` | "Why Spark?" has no answer without it. (a) is an independent, well-known implementation; (c) measures Spark overhead, not the alternative. |
+| F1 | Single-machine baseline | **Decided — D10** | |
 | F2 | Benchmark workload | **Decided — D9** | |
-| F3 | DataFrame rewrite scope | **(a) DataFrame engine end to end, selectable with `--engine df`, with the RDD engine kept for comparison** · (b) a hybrid: DataFrames for parse/RAG/prune, RDDs for the path search · (c) GraphFrames | (a) gives a clean before/after and the Catalyst / AQE / broadcast-join story. (c) adds a dependency, and its motif finding has a fixed cycle length. |
-| F4 | Frontier join strategy (with F3) | **(a) broadcast hint when the frontier is small, AQE (adaptive query execution) on** · (b) always a shuffle join | The frontier was only about 250 paths at 5k lines; shuffling it every hop is pure overhead. |
-| F5 | Cluster run | **(a) Docker Compose: 1 master + 2 workers, `spark-submit --py-files`** · (b) skip — local mode only | Shows the code is not tied to `local[N]`. All containers share one host, and that must be stated. |
-| F6 | CI | **(a) GitHub Actions, Ubuntu, `setup-java` 17, Python 3.12, `pytest`** · (b) a 3.9–3.12 × Java 11/17 matrix | (b) costs CI minutes for little gain. |
+| F3 | DataFrame rewrite scope | **Decided — D11** | |
+| F4 | Frontier join strategy | **Decided — D12** | |
+| F5 | Cluster run | **(a) Docker Compose: 1 master + 2 workers, `spark-submit --py-files`** · (b) skip — local mode only | Shows the code is not tied to `local[N]`. All containers share one host, and that must be stated. **Cut for now** (first in the cut order; Docker is not installed in WSL) |
+| F6 | CI | **Decided — D13** | |
 
 ---
 
@@ -166,6 +166,54 @@ every run.
 **Known simplification:** a process may wait on several resources at once (the AND request
 model), because hubs and thetas need it. There are no release events, matching the log format.
 
+### D10 — the single-machine baseline is networkx in one Python process (fork F1)
+**Adopted by default, 12 Oct 2026.**
+
+| Option | What it means | Cost |
+|---|---|---|
+| networkx: strongly connected components, then `simple_cycles` with a length bound (chosen) | A well-known library implementation, independent of the Spark code. Same parser, same answer, checked against the same ground truth | networkx stores the graph as Python dicts of dicts, about 1.1 KB per log line, so memory, not time, is what limits it |
+| A hand-written DFS | No dependency | It would be my own code checking my own code, and an easy target for "your baseline is a strawman" |
+| The Spark code in `local[1]` | No new code | It measures Spark's overhead, not the alternative to Spark |
+
+The baseline prunes with SCCs, which is exact (only cycle members survive). The Spark engines
+use degree pruning, which also keeps bridges. The baseline therefore has the stronger
+algorithm, which makes the comparison harder for Spark, not easier.
+It runs under `prlimit --as=9G`, so that running out of memory shows up as a `MemoryError`
+instead of 16 GB of swap thrashing.
+**What would change my mind:** a lean single-process version (integer ids, arrays, or
+`scipy.sparse.csgraph` for the SCCs) would move the memory wall. That is the obvious attack on
+this baseline (`DEFENCE.md`).
+
+### D11 — a DataFrame engine end to end, with the RDD engine kept (fork F3)
+**Adopted by default, 12 Oct 2026.** `--engine df` (`df_engine.py`). It follows the same steps and
+the same algorithm, so the two engines differ only in the API.
+
+| Option | Cost |
+|---|---|
+| Full DataFrame pipeline (chosen) | The path search uses array columns (`array_contains`, `concat`), and the parser has to be rewritten in SQL |
+| Hybrid: DataFrames up to pruning, RDDs for the search | Two APIs in one run, and a conversion at the seam |
+| GraphFrames | An extra package; its motif finding fixes the pattern length in advance, which does not fit cycles of varying length |
+
+**Parsing in native SQL, not as a Python UDF (user-defined function).** A UDF wrapping
+`parse_line` would ship every line to a Python worker and back, which is exactly the cost the
+rewrite is meant to remove. **Cost:** the parser now exists twice.
+`test_sql_parser_matches_python_parser` pins them together on hand-made edge cases (tabs,
+trailing commas, glued tokens, empty tokens, bare prefixes) and on a generated log. **Known
+gap:** Python's `split()` also splits on Unicode whitespace and Java's `\s` does not.
+
+### D12 — AQE decides join strategies; no hand-written broadcast hints (fork F4)
+**Adopted by default, 12 Oct 2026.** Adaptive query execution (on by default since Spark 3.2)
+re-plans each query stage from the actual size of its input. It switches a join to a broadcast
+join when one side is below `spark.sql.autoBroadcastJoinThreshold` (10 MB), and it coalesces
+small shuffle partitions. **Rejected:** a manual `broadcast()` hint on the frontier. It would need
+a size estimate that the engine already has at run time, and a wrong hint on a large frontier
+broadcasts a large table to every executor.
+
+### D13 — CI is one configuration (fork F6)
+**Adopted by default, 12 Oct 2026.** GitHub Actions on Ubuntu, Temurin Java 17, Python 3.12,
+`pip install -e .[dev]`, `pytest`. **Rejected:** a Python × Java matrix, which costs CI minutes to
+test combinations nobody runs.
+
 ---
 
 ## Invariants
@@ -176,7 +224,8 @@ model), because hubs and thetas need it. There are no release events, matching t
 | I2 | Every cycle is reported exactly once, starting at its smallest process | Canonical-origin rule in `extend` | brute-force comparison (exact list equality) |
 | I3 | A reported cycle alternates P, R, P, R and has no repeated node | The RAG is bipartite by construction; `nbr not in path` | brute-force comparison |
 | I4 | `formed_at` = max over the cycle's edges of each edge's first appearance | `max` carried along each path | `test_resource_first_hold_lines_count`, brute-force comparison |
-| I5 | Partition counts stay fixed across iterations | Explicit `numPartitions` everywhere | **not tested yet** — a `getNumPartitions()` assertion is the cheap fix |
+| I5 | Partition counts stay fixed across iterations | Explicit `numPartitions` everywhere | `test_partition_count_stays_fixed_across_pruning_rounds` |
+| I6 | The RDD engine, the DataFrame engine and the baseline give identical answers | One algorithm, three implementations | Every detector test runs on both engines; every benchmark run is checked against the generator's ground truth |
 
 ---
 
