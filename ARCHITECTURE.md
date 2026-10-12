@@ -98,7 +98,7 @@ Decisions D1–D8 were taken while rebuilding the coursework version (12 Oct 202
 
 **Chosen:** RDDs. The coursework version was written with RDDs, and keeping them let the cleanup be
 measured like-for-like against the original.
-**What would change my mind:** this is fork F3. Phase 3 rewrites it and measures both.
+**Superseded by D11:** the DataFrame engine now exists alongside, and `BENCHMARKS.md` §5 measures both.
 
 ### D2 — exact degree pruning instead of connected components
 | Option | What it means | Cost |
@@ -122,7 +122,7 @@ At that point SCC wins.
 PySpark's `join` defaults to the partition count of the union of its inputs, so iterative
 loops compounded it (320 → 35,040 tasks in four rounds). One fixed count, `2 × cores` by
 default, is passed everywhere. **Rejected:** per-stage tuning (more knobs, little gain at this
-scale). AQE in phase 3 makes this automatic.
+scale). The DataFrame engine (D11, D12) leaves this to AQE.
 
 ### D5 — a bounded search that reports when it is incomplete
 `--max-cycle-length` bounds the depth, and `--max-paths` bounds the frontier. If the frontier
@@ -182,7 +182,7 @@ It runs under `prlimit --as=9G`, so that running out of memory shows up as a `Me
 instead of 16 GB of swap thrashing.
 **What would change my mind:** a lean single-process version (integer ids, arrays, or
 `scipy.sparse.csgraph` for the SCCs) would move the memory wall. That is the obvious attack on
-this baseline (`DEFENCE.md`).
+this baseline, and it is listed as not yet measured in `BENCHMARKS.md`.
 
 ### D11 — a DataFrame engine end to end, with the RDD engine kept (fork F3)
 **Adopted by default, 12 Oct 2026.** `--engine df` (`df_engine.py`). It follows the same steps and

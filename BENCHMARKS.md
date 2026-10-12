@@ -12,9 +12,9 @@ Every number carries its method and the commit it was measured at. Estimates are
 | Machine | 8-core ARM64 (aarch64) laptop, 11 GB RAM visible to WSL2 |
 | Operating system | Ubuntu on WSL2, Linux 6.6.87 (microsoft-standard-WSL2) |
 | Toolchain | Python 3.12.3, PySpark 3.4.1, OpenJDK 17 |
-| Topology | Spark `local[4]` — driver and executors in one JVM on one machine |
+| Topology | Spark `local[N]` (N stated per section) — driver and executors in one JVM on one machine |
 | Timing | Wall clock around the whole CLI process, so JVM start-up, Spark context creation and report printing are all included |
-| Known distortions | No network: every shuffle is local disk and memory, so cluster runs will cost more per shuffle. The synthetic workload has almost every process in a cycle, so pruning removes nearly nothing (a realistic workload is phase 1). Other desktop load was not controlled. |
+| Known distortions | No network: every shuffle is local disk and memory, so cluster runs will cost more per shuffle. §1 and §2 use the original synthetic workload, where almost every process is in a cycle, so pruning removes nearly nothing; §3–§5 use the realistic generator. Other desktop load was not controlled. |
 
 ---
 
@@ -84,7 +84,7 @@ algorithm as `355b124`).
 
 **Reading:** on 5k lines, more cores make it *slower*. The work per round is tiny, so extra
 partitions only add per-task scheduling and Python-worker overhead. This is the honest answer
-to "why Spark for 9 MB?": at this size it isn't faster. Phase 1 measures where it starts to win.
+to "why Spark for 9 MB?": at this size it isn't faster. §3 measures where it starts to win.
 
 ---
 
@@ -162,7 +162,7 @@ rounds. The search stays small because pruning has already cut the graph to abou
 1 → 2 cores gave 3.3×, which is impossible from parallelism alone. With 2 partitions, each task
 held about 3M edges: the build stage alone went from 59 s to 322 s, and the runs spread by 40%.
 That is memory pressure (spill and garbage collection) from oversized partitions, not a
-parallelism effect. See error log E8. The fixed-partition re-run is below.
+parallelism effect. The fixed-partition re-run is below.
 
 **Re-run with partitions fixed at 16** (commit `b1806a4`; the 8-core row is the §3 run, which
 already used 16 partitions). Figure: `docs/figures/core_sweep_{light,dark}.png`.
@@ -233,8 +233,8 @@ Figure: `docs/figures/size_sweep_{light,dark}.png`.
 
 | Not measured | Why not | Expectation |
 |---|---|---|
-| A lean single-process baseline (integer ids, `scipy.sparse.csgraph`) | Not scheduled (`DEFENCE.md` weak spot) | `ESTIMATE`: 5–10× less memory than networkx; would likely fit 20M lines and beat Spark there on one laptop |
+| A lean single-process baseline (integer ids, `scipy.sparse.csgraph`) | Not scheduled; the obvious objection to §3 | `ESTIMATE`: 5–10× less memory than networkx; would likely fit 20M lines and beat Spark there on one laptop |
 | Core sweep for the DataFrame engine | Time | Better scaling than RDD (no Python workers), still limited by the serial driver loop |
 | AQE off vs on, broadcast vs shuffle join | Not isolated | The §5 gain mixes JVM execution, Catalyst and AQE; it is not attributed to any one of them |
-| Anything on a real cluster | No Docker in WSL (phase 4 cut) | More cost per shuffle than local mode |
+| Anything on a real cluster | No Docker in WSL yet | More cost per shuffle than local mode |
 | Spark's memory use | `/usr/bin/time` sees only the Python driver, not the JVM | Bounded per partition; spills to disk |
