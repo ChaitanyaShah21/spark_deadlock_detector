@@ -6,6 +6,7 @@ import time
 from dataclasses import asdict
 
 from .detector import create_spark, detect_deadlocks
+from .df_engine import detect_deadlocks_df
 
 MAX_PRINTED_CYCLES = 20
 
@@ -16,6 +17,8 @@ def parse_args(argv=None):
         description="Detect deadlocks in a resource-allocation log with Apache Spark.",
     )
     p.add_argument("log", help="log file of WAIT/HOLD events")
+    p.add_argument("--engine", choices=("rdd", "df"), default="rdd",
+                   help="RDD pipeline or DataFrame / Spark SQL pipeline (default: rdd)")
     p.add_argument("-c", "--cores", type=int, default=os.cpu_count(), help="local Spark cores (default: all)")
     p.add_argument("--partitions", type=int, help="RDD partitions (default: 2 x cores)")
     p.add_argument("--max-cycle-length", type=int, default=13, metavar="N",
@@ -71,8 +74,12 @@ def main(argv=None):
     start = time.perf_counter()
     spark = create_spark(args.cores, args.driver_memory)
     try:
-        report = detect_deadlocks(
-            spark.sparkContext,
+        if args.engine == "df":
+            run, target = detect_deadlocks_df, spark
+        else:
+            run, target = detect_deadlocks, spark.sparkContext
+        report = run(
+            target,
             args.log,
             partitions=args.partitions or 2 * args.cores,
             max_cycle_processes=args.max_cycle_length,

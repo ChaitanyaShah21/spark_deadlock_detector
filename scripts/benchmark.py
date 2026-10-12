@@ -7,6 +7,7 @@ Spark it would only see the Python driver, not the JVM, so it is left blank. Eve
 ground-truth file, and one CSV row is appended per run.
 
     python scripts/benchmark.py spark data/generated/real_2m.log --cores 4 --runs 3
+    python scripts/benchmark.py spark-df data/generated/real_2m.log --cores 4 --runs 3
     python scripts/benchmark.py baseline data/generated/real_2m.log --runs 3
 """
 
@@ -38,7 +39,7 @@ def command(engine, log, out, args):
         cmd = [str(BIN / "deadlock-detector-baseline"), log, "--json", out]
         # fail with MemoryError instead of driving the machine into swap
         return ["prlimit", f"--as={args.mem_limit_gb << 30}", "--"] + cmd
-    return [str(BIN / "deadlock-detector"), log, "-c", str(args.cores), "--max-paths", str(args.max_paths),
+    return [str(BIN / "deadlock-detector"), log, "--engine", "df" if engine == "spark-df" else "rdd", "-c", str(args.cores), "--max-paths", str(args.max_paths),
             "--driver-memory", args.driver_memory, "--json", out]
 
 
@@ -59,7 +60,7 @@ def check(result, truth):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("engine", choices=("spark", "baseline"))
+    ap.add_argument("engine", choices=("spark", "spark-df", "baseline"))
     ap.add_argument("log")
     ap.add_argument("--cores", type=int, default=4)
     ap.add_argument("--runs", type=int, default=3)
