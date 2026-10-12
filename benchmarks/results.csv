@@ -60,3 +60,20 @@ date,commit,engine,log,lines,cores,run,status,wall_s,peak_mb,build_s,prune_s,sea
 2026-10-12 16:50,b1806a4-dirty,spark,real_6m.log,6001000,1,1,ok,564.7,,123.7,257.5,178.2,17587,True,16,local
 2026-10-12 17:00,b1806a4-dirty,spark,real_6m.log,6001000,1,2,ok,561.0,,120.7,257.3,177.5,17587,True,16,local
 2026-10-12 17:09,b1806a4-dirty,spark,real_6m.log,6001000,1,3,ok,566.4,,120.7,262.5,178.2,17587,True,16,local
+2026-10-12 19:44,2e5d352,spark-df,real_200k.log,200037,8,1,excluded: aborted first sweep,46.4,,14.7,7.7,17.9,612,True,16,spark://spark-master:7077
+2026-10-12 19:44,2e5d352,spark-df,real_200k.log,200037,8,2,excluded: aborted first sweep,48.8,,15.8,8.7,17.8,612,True,16,spark://spark-master:7077
+2026-10-12 19:46,c30d9b8-dirty,spark-df,real_200k.log,200037,8,1,ok,45.9,,13.8,8.6,16.7,612,True,16,spark://spark-master:7077
+2026-10-12 19:47,c30d9b8-dirty,spark-df,real_200k.log,200037,8,2,ok,46.2,,14.9,7.6,17.4,612,True,16,spark://spark-master:7077
+2026-10-12 19:48,c30d9b8-dirty,spark-df,real_200k.log,200037,8,3,ok,45.9,,13.7,7.8,18.6,612,True,16,spark://spark-master:7077
+2026-10-12 19:49,c30d9b8-dirty,spark-df,real_2m.log,2000333,8,1,ok,62.1,,21.3,14.8,20.0,5834,True,16,spark://spark-master:7077
+2026-10-12 19:50,c30d9b8-dirty,spark-df,real_2m.log,2000333,8,2,ok,64.2,,22.2,15.3,20.4,5834,True,16,spark://spark-master:7077
+2026-10-12 19:51,c30d9b8-dirty,spark-df,real_2m.log,2000333,8,3,ok,62.4,,21.6,14.3,20.2,5834,True,16,spark://spark-master:7077
+2026-10-12 19:53,c30d9b8-dirty,spark-df,real_6m.log,6001000,8,1,ok,98.2,,37.2,26.3,28.5,17587,True,16,spark://spark-master:7077
+2026-10-12 20:24,c30d9b8-dirty,spark-df,real_6m.log,6001000,8,2,excluded: laptop suspended mid-run,127.3,,65.9,25.2,29.3,17587,True,16,spark://spark-master:7077
+2026-10-12 20:25,c30d9b8-dirty,spark-df,real_6m.log,6001000,8,3,ok,90.6,,37.7,20.7,25.1,17587,True,16,spark://spark-master:7077
+2026-10-12 20:29,c30d9b8-dirty,spark-df,real_20m.log,20003350,8,1,ok,193.2,,93.4,59.3,33.4,59047,True,16,spark://spark-master:7077
+2026-10-12 20:32,c30d9b8-dirty,spark-df,real_20m.log,20003350,8,2,ok,186.3,,95.3,50.2,33.6,59047,True,16,spark://spark-master:7077
+2026-10-12 20:35,c30d9b8-dirty,spark-df,real_20m.log,20003350,8,3,ok,178.8,,90.6,48.9,31.8,59047,True,16,spark://spark-master:7077
+2026-10-12 20:38,c30d9b8-dirty,spark,real_6m.log,6001000,8,1,ok,176.2,,38.6,75.3,57.2,17587,True,16,spark://spark-master:7077
+2026-10-12 20:41,c30d9b8-dirty,spark,real_6m.log,6001000,8,2,ok,178.4,,37.4,76.9,58.9,17587,True,16,spark://spark-master:7077
+2026-10-12 20:44,c30d9b8-dirty,spark,real_6m.log,6001000,8,3,ok,174.4,,38.3,74.1,56.9,17587,True,16,spark://spark-master:7077

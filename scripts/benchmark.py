@@ -29,7 +29,9 @@ FIELDS = ["date", "commit", "engine", "log", "lines", "cores", "run", "status", 
 
 def commit():
     sha = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
-    dirty = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no"], cwd=ROOT,
+    # the results file is tracked and this script appends to it, so it never counts as dirty
+    dirty = subprocess.run(["git", "status", "--porcelain", "--untracked-files=no", "--", ".",
+                            ":!benchmarks/results.csv"], cwd=ROOT,
                            capture_output=True, text=True).stdout.strip()
     return sha + ("-dirty" if dirty else "")
 

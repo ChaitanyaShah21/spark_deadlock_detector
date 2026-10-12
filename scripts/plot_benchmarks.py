@@ -36,7 +36,9 @@ def load():
     groups, failed = defaultdict(list), {}
     with open(ROOT / "benchmarks" / "results.csv") as f:
         for row in csv.DictReader(f):
-            if row["partitions"] not in ("", "16"):
+            if row["partitions"] not in ("", "16") or row["master"] not in ("", "local"):
+                continue  # confounded core sweep, or the Docker cluster (plotted separately)
+            if row["status"].startswith("excluded"):
                 continue
             key = (row["engine"], int(row["lines"]), int(row["cores"]))
             if row["status"] == "ok" and row["correct"] == "True":
