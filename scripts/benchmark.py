@@ -92,7 +92,7 @@ def main():
                 peak_mb = int(open(timing).read().split()[-1]) / 1024
                 row = {"date": time.strftime("%Y-%m-%d %H:%M"), "commit": sha, "engine": args.engine,
                        "log": Path(args.log).name, "lines": truth["lines"],
-                       "cores": args.cores if args.engine == "spark" else 1, "run": run,
+                       "cores": 1 if args.engine == "baseline" else args.cores, "run": run,
                        "wall_s": f"{wall:.1f}", "peak_mb": f"{peak_mb:.0f}" if args.engine == "baseline" else "",
                        "partitions": "" if args.engine == "baseline" else args.partitions}
                 if proc.returncode == 0 and os.path.exists(out):
