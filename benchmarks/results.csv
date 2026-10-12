@@ -77,3 +77,4 @@ date,commit,engine,log,lines,cores,run,status,wall_s,peak_mb,build_s,prune_s,sea
 2026-10-12 20:38,c30d9b8-dirty,spark,real_6m.log,6001000,8,1,ok,176.2,,38.6,75.3,57.2,17587,True,16,spark://spark-master:7077
 2026-10-12 20:41,c30d9b8-dirty,spark,real_6m.log,6001000,8,2,ok,178.4,,37.4,76.9,58.9,17587,True,16,spark://spark-master:7077
 2026-10-12 20:44,c30d9b8-dirty,spark,real_6m.log,6001000,8,3,ok,174.4,,38.3,74.1,56.9,17587,True,16,spark://spark-master:7077
+2026-10-12 20:45,bbba953,spark-df,real_6m.log,6001000,8,1,ok,84.1,,34.0,20.9,23.9,17587,True,16,spark://spark-master:7077

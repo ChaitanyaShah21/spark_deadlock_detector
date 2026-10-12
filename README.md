@@ -26,10 +26,12 @@ On one 8-core ARM64 laptop (11 GB RAM, WSL2), on realistic generated logs where 
 - **The DataFrame engine overtakes the single process between 2M and 6M lines,** and it is the only way the 20M log finishes on this machine. The networkx process needs about 1.2 KB of RAM per log line.
 - **DataFrames beat RDDs 2.2× at every size.** Most of the gain is in pruning (4.2× faster at 20M), where RDD lambdas paid to move every edge to a Python worker and back on every round.
 - **Strong scaling is 3.9× from 1 to 8 cores** (6M lines, RDD engine). It flattens past 4 cores because the iteration loop on the driver is serial.
+- **The same code runs unchanged on a Spark standalone cluster.** On Docker Compose (1 master and 2 workers × 4 cores, on the same machine), the 20M log takes 186.3 s with the exact answer, against 170.8 s in `local[8]`. The cluster adds a roughly constant 15–19 s for executor launch.
+  This is not horizontal scaling: every container shares one host.
 
 Every number is a median of 3 runs. Each run is a fresh process timed from outside, with its commit recorded and its output checked against ground truth.
 The method, raw runs, per-stage splits and known distortions are in [BENCHMARKS.md](BENCHMARKS.md); the raw rows are in [benchmarks/results.csv](benchmarks/results.csv).
-**Not measured:** a leaner single-process baseline (integer ids, scipy), which would likely fit 20M lines, and any multi-machine cluster.
+**Not measured:** a leaner single-process baseline (integer ids, scipy), which would likely fit 20M lines, and a multi-machine cluster.
 
 <details>
 <summary>Core scaling plot</summary>

@@ -14,7 +14,7 @@ Every number carries its method and the commit it was measured at. Estimates are
 | Toolchain | Python 3.12.3, PySpark 3.4.1, OpenJDK 17 |
 | Topology | Spark `local[N]` (N stated per section) — driver and executors in one JVM on one machine |
 | Timing | Wall clock around the whole CLI process, so JVM start-up, Spark context creation and report printing are all included |
-| Known distortions | No network: every shuffle is local disk and memory, so cluster runs will cost more per shuffle. §1 and §2 use the original synthetic workload, where almost every process is in a cycle, so pruning removes nearly nothing; §3–§5 use the realistic generator. Other desktop load was not controlled. |
+| Known distortions | §6 runs in Docker containers on the same host; elsewhere no network: every shuffle is local disk and memory, so cluster runs will cost more per shuffle. §1 and §2 use the original synthetic workload, where almost every process is in a cycle, so pruning removes nearly nothing; §3–§5 use the realistic generator. Other desktop load was not controlled. |
 
 ---
 
@@ -28,6 +28,7 @@ Every number carries its method and the commit it was measured at. Estimates are
 | DataFrame engine vs RDD engine | **2.2× faster** at every size, 0.2M–20M lines | — | `b1806a4` | §5 |
 | Single process (networkx) on the same 20M log | **out of memory** at 8.8 GB; 107.5 s at 6M vs 71.5 s for the DataFrame engine | — | `0764bab` | §3 |
 | Strong scaling, 1 → 8 cores, 6M lines, RDD | **3.9×** (564.7 s → 144.9 s) | — | `b1806a4` / `f176358` | §4 |
+| Same DataFrame pipeline on a standalone cluster (Docker Compose, 2 workers × 4 cores, one host), 20M lines | **186.3 s**, exact | 170.8 s (`local[8]`) | `c30d9b8` | §6 |
 
 ---
 
@@ -233,6 +234,46 @@ Figure: `docs/figures/size_sweep_{light,dark}.png`.
 
 ---
 
+## §6 · The same pipeline on a Spark standalone cluster (Docker Compose, one machine)
+
+**Question this answers:** does the code run unchanged against a real cluster manager, and what
+does leaving `local` mode cost?
+
+**Method:** `docker compose up` (D14): 1 master, 2 workers with 4 cores and 3 GB each
+(executors 2 GB), and a driver container connecting with `--master spark://spark-master:7077` in
+client mode. 8 executor cores and 16 shuffle partitions, as in the `local[8]` runs. The logs are
+bind-mounted at `/data` in every container. Harness, timing and ground-truth check as §3.
+**Commit:** `c30d9b8` (cluster image built from `2e5d352`; `src/`, the Dockerfile and the Spark conf
+are identical between them). The `-dirty` suffix on these rows is the harness's own appends to the
+tracked `results.csv`; the dirty check now ignores that file. **Date:** 12 Oct 2026.
+**Excluded rows (kept in the CSV, marked in `status`):** two 0.2M rows from a first sweep attempt
+that was stopped, and one 6M run during which the laptop was suspended (127.3 s, build stage 65.9 s
+against about 37 s in the others). That run was replaced by an extra run at `bbba953`.
+
+| Engine | Log lines | `local[8]` | Cluster | Cluster runs | Difference |
+|---|---:|---:|---:|---|---:|
+| DataFrame | 0.2M | 27.5 s | 45.9 s | 45.9 / 46.2 / 45.9 | +18.4 s |
+| DataFrame | 2M | 43.8 s | 62.4 s | 62.1 / 64.2 / 62.4 | +18.6 s |
+| DataFrame | 6M | 71.5 s | 90.6 s | 98.2 / 90.6 / 84.1 | +19.1 s |
+| DataFrame | 20M | 170.8 s | 186.3 s | 193.2 / 186.3 / 178.8 | +15.5 s (1.09×) |
+| RDD | 6M | 144.9 s | 176.2 s | 176.2 / 178.4 / 174.4 | +31.3 s (1.22×) |
+
+Every run found the exact ground-truth cycles (59,047 at 20M).
+
+**Reading:**
+- **The DataFrame engine's cluster cost is a roughly constant 15–19 s, not a per-byte cost.** It is
+  executor launch and registration, plus the driver and executors being separate JVMs. At 20M lines
+  it is only 9% of the runtime.
+- **The RDD engine pays more (+31 s at 6M):** its Python workers run inside executor containers
+  with 2 GB each, rather than one 6 GB JVM, and every RDD shuffle round-trips through Python.
+  The search stage shows it most (41.6 → 57.2 s).
+- **What this does not show:** horizontal scaling. All containers share one CPU, one memory bus
+  and one disk, and the "network" is a Docker bridge on the same host. A multi-machine cluster
+  would pay real network transfer per shuffle, and would also add real cores and RAM; neither is
+  measured here.
+
+---
+
 ## Numbers not yet measured
 
 | Not measured | Why not | Expectation |
@@ -240,5 +281,5 @@ Figure: `docs/figures/size_sweep_{light,dark}.png`.
 | A lean single-process baseline (integer ids, `scipy.sparse.csgraph`) | Not scheduled; the obvious objection to §3 | `ESTIMATE`: 5–10× less memory than networkx; would likely fit 20M lines and beat Spark there on one laptop |
 | Core sweep for the DataFrame engine | Time | Better scaling than RDD (no Python workers), still limited by the serial driver loop |
 | AQE off vs on, broadcast vs shuffle join | Not isolated | The §5 gain mixes JVM execution, Catalyst and AQE; it is not attributed to any one of them |
-| Anything on a real cluster | No Docker in WSL yet | More cost per shuffle than local mode |
+| A multi-machine cluster | One laptop; §6 is a single-host Docker cluster | Network transfer per shuffle; real horizontal scaling |
 | Spark's memory use | `/usr/bin/time` sees only the Python driver, not the JVM | Bounded per partition; spills to disk |
