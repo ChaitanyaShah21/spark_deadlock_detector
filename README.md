@@ -1,5 +1,7 @@
 # Spark Deadlock Detector
 
+[![tests](https://github.com/ChaitanyaShah21/spark_deadlock_detector/actions/workflows/ci.yml/badge.svg)](https://github.com/ChaitanyaShah21/spark_deadlock_detector/actions/workflows/ci.yml)
+
 Detects deadlocks in large resource-allocation logs with Apache Spark (PySpark RDDs).
 The log is turned into a Resource Allocation Graph (RAG). The detector then prunes every process that cannot be on a cycle and enumerates the remaining deadlock cycles with iterative distributed joins.
 
