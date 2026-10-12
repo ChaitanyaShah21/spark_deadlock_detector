@@ -113,13 +113,13 @@ In those logs every process is deadlocked.
 
 End-to-end wall time, including Spark startup, with `local[4]` on an 8-core ARM64 laptop (WSL2, 11 GB RAM).
 The "original" column is the first version of this code, before the rewrite described below. Both versions find the same cycles.
-Current: median of 3 runs. Original: 1 run. Method and raw runs are in [BENCHMARKS.md](BENCHMARKS.md).
+Median of 3 runs for each version, measured back to back in one session. Method and raw runs are in [BENCHMARKS.md](BENCHMARKS.md).
 
 | Log lines | Deadlocks | Original | Current | Speedup |
 |---:|---:|---:|---:|---:|
-| 5,247 | 249 | 69.6 s | 36.8 s | 1.9× |
-| 52,497 | 2,499 | 95.3 s | 41.7 s | 2.3× |
-| 209,997 | 9,999 | 221.3 s | 51.6 s | 4.3× |
+| 5,247 | 249 | 72.7 s | 34.7 s | 2.1× |
+| 52,497 | 2,499 | 94.3 s | 39.9 s | 2.4× |
+| 209,997 | 9,999 | 216.9 s | 51.2 s | 4.2× |
 
 What changed:
 - **Exact pruning** replaced a connected-components heuristic. That heuristic stopped after 10 label-propagation rounds and could miss cycle members in long chains.

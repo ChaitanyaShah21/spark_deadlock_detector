@@ -22,8 +22,8 @@ Every number carries its method and the commit it was measured at. Estimates are
 
 | Claim | Current | Before | Commit | Entry |
 |---|---|---|---|---|
-| End-to-end runtime, 210k-line log, 9,999 deadlocks | **51.6 s** | 221.3 s | `355b124` | §1 |
-| Speedup over the original implementation | **4.3×** at 210k lines, 1.9× at 5k | — | `355b124` | §1 |
+| End-to-end runtime, 210k-line log, 9,999 deadlocks | **51.2 s** | 216.9 s | `adc1e9f` | §1 |
+| Speedup over the original implementation | **4.2×** at 210k lines, 2.1× at 5k | — | `adc1e9f` | §1 |
 
 ---
 
@@ -36,16 +36,22 @@ partition counts, cached search rounds) make it faster without changing the answ
 (original), each a fresh process, run one after another on an otherwise idle machine.
 **Workload:** `scripts/generate_log.py` logs — disjoint 10-process deadlock cycles,
 identical bytes for both versions.
-**Current:** commit `355b124`, median of 3 runs.
-**Original:** `AOS_Assignment4.py` (sha256 prefix `c4e6eac13e6995fe`, not in this repository),
-**single run per size** — re-measuring it three times is the first step of phase 1.
+**Current:** commit `adc1e9f` (`src/` identical to `355b124`), median of 3 runs.
+**Original:** `AOS_Assignment4.py` (sha256 prefix `c4e6eac13e6995fe`, not in this repository,
+its own `venv/`, Java 17), median of 3 runs.
+**Both measured in the same session, original first, then current, back to back,** so drift in
+machine state between sessions does not enter the ratio.
 **Date:** 12 Oct 2026
 
-| Log lines | Deadlocks | Original (1 run) | Current (median of 3) | Current runs | Speedup |
-|---:|---:|---:|---:|---|---:|
-| 5,247 | 249 | 69.6 s | 36.8 s | 35.6 / 36.8 / 39.1 | 1.9× |
-| 52,497 | 2,499 | 95.3 s | 41.7 s | 41.7 / 43.5 / 41.0 | 2.3× |
-| 209,997 | 9,999 | 221.3 s | 51.6 s | 51.6 / 54.7 / 51.2 | 4.3× |
+| Log lines | Deadlocks | Original (median of 3) | Original runs | Current (median of 3) | Current runs | Speedup |
+|---:|---:|---:|---|---:|---|---:|
+| 5,247 | 249 | 72.7 s | 78.8 / 72.7 / 71.9 | 34.7 s | 34.7 / 33.7 / 34.8 | 2.1× |
+| 52,497 | 2,499 | 94.3 s | 94.3 / 99.1 / 93.9 | 39.9 s | 39.9 / 42.3 / 39.2 | 2.4× |
+| 209,997 | 9,999 | 216.9 s | 216.9 / 216.9 / 221.6 | 51.2 s | 51.2 / 54.2 / 50.8 | 4.2× |
+
+**Superseded:** an earlier session measured the original once per size (69.6 / 95.3 / 221.3 s) and the
+current version at `355b124` (medians 36.8 / 41.7 / 51.6 s, giving 4.3×). The same-session medians
+above replace them. Single runs drift by about 10% between sessions; the 5k original went from 69.6 s to 72–79 s.
 
 Both versions report the same number of cycles at every size.
 
