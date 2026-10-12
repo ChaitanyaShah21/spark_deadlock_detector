@@ -98,10 +98,18 @@ pytest
 
 The tests cover the parser, hand-built graphs (a chain feeding into a cycle, two cycles sharing a process, the length limit, resource-first lines) and the sample log.
 They also compare the Spark output, cycles and formation times included, against an independent brute-force DFS on random graphs.
+A further test checks it against the ground-truth file of a realistic generated log.
 
 ## Benchmarks
 
 `scripts/generate_benchmark_logs.sh` writes synthetic logs with a known number of 10-process deadlocks (see [generate_log.py](scripts/generate_log.py)).
+In those logs every process is deadlocked.
+[generate_realistic_log.py](scripts/generate_realistic_log.py) writes a harder and more realistic workload, along with a ground-truth file:
+- about 2% of processes are deadlocked;
+- the other processes sit in blocked chains and trees that pruning has to remove;
+- cycles are 2–10 processes long, and some cycles share processes;
+- some chains bridge two deadlocks;
+- some WAITs are retried, and some lines are malformed.
 
 End-to-end wall time, including Spark startup, with `local[4]` on an 8-core ARM64 laptop (WSL2, 11 GB RAM).
 The "original" column is the first version of this code, before the rewrite described below. Both versions find the same cycles.

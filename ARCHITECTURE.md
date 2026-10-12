@@ -63,7 +63,8 @@ flowchart TD
 | `cycles.py` | Distributed cycle enumeration | `groupByKey` (adjacency), `join` + `flatMap` per hop, `collect` of closed cycles |
 | `detector.py` | Pipeline order, caching, hotspots, timeline, timings | `countByValue`, `takeOrdered`, `cache` |
 | `cli.py` | Arguments, report printing, JSON output | — |
-| `scripts/generate_log.py` | Synthetic logs with a known number of deadlocks | — |
+| `scripts/generate_log.py` | Synthetic logs with a known number of deadlocks (every process deadlocked; kept for the §1 comparison) | — |
+| `scripts/generate_realistic_log.py` | Realistic benchmark logs plus a ground-truth JSON file (every cycle, its formation time, the expected survivors of pruning) | — |
 
 ---
 
@@ -74,7 +75,7 @@ Each fork has a recommended option. Until a fork is decided, the recommendation 
 | # | Fork | Options (recommended first) | Why it matters |
 |---|---|---|---|
 | F1 | Single-machine baseline to compare Spark against | **(a) `networkx` SCC + `simple_cycles` in one Python process** · (b) a hand-written DFS · (c) the same code in `local[1]` | "Why Spark?" has no answer without it. (a) is an independent, well-known implementation; (c) measures Spark overhead, not the alternative. |
-| F2 | Benchmark workload | **(a) a realistic generator: most processes not deadlocked, chains feeding into cycles, cycles of varied length that share processes, timestamps spread over days, malformed lines** · (b) scale up the current generator | The current generator puts almost every process in a cycle, so pruning removes nothing and the numbers describe an unrealistic best case. |
+| F2 | Benchmark workload | **Decided — D9** | |
 | F3 | DataFrame rewrite scope | **(a) DataFrame engine end to end, selectable with `--engine df`, with the RDD engine kept for comparison** · (b) a hybrid: DataFrames for parse/RAG/prune, RDDs for the path search · (c) GraphFrames | (a) gives a clean before/after and the Catalyst / AQE / broadcast-join story. (c) adds a dependency, and its motif finding has a fixed cycle length. |
 | F4 | Frontier join strategy (with F3) | **(a) broadcast hint when the frontier is small, AQE (adaptive query execution) on** · (b) always a shuffle join | The frontier was only about 250 paths at 5k lines; shuffling it every hop is pure overhead. |
 | F5 | Cluster run | **(a) Docker Compose: 1 master + 2 workers, `spark-submit --py-files`** · (b) skip — local mode only | Shows the code is not tied to `local[N]`. All containers share one host, and that must be stated. |
@@ -142,6 +143,28 @@ deterministic.
 ### D8 — generator ported from C++ to Python
 One language in the repo and no compiled binary to commit. The port was proved byte-identical
 to the C++ output on all six original logs.
+
+### D9 — a realistic workload generator with a ground-truth file (fork F2)
+**Adopted by default, 12 Oct 2026.**
+
+| Option | What it means in practice | Cost |
+|---|---|---|
+| A realistic generator (chosen) | About 2% of processes deadlocked. The rest sit in blocking trees, feeder chains and tails. Cycles of 2–10 processes, some sharing a hub process or a path. Bridges link clusters, timestamps spread over 30 days, WAITs are retried, and 0.5% of lines are malformed | A second generator to maintain. Its ground truth has to be proved, not assumed |
+| Scale up `generate_log.py` | Same disjoint 10-cycles, more of them | Nothing is ever pruned, every cycle is the same length, there are no duplicate edges and no bad lines, so the benchmark measures an unrealistic best case for pruning |
+
+**How the ground truth is known exactly:** every wait-for edge `a → b` is written as `WAIT a R_b`,
+where `R_b` is the one resource `b` holds, and each resource has exactly one holder. The RAG's
+cycles are then exactly the wait-for cycles. Those are planted by construction: a single
+cycle, a hub (k cycles meeting at one process: exactly k), or a theta (one path u → v and two
+paths v → u: exactly 2). Bridges only run from an older cluster to a newer one, so they can
+never close a cycle. Process and resource ids are scrambled by `n → n·a mod p` (`p` prime), so
+a cycle's smallest id is not simply its first-created process.
+**Verified:** brute-force DFS over the log, parsed by the real parser, agrees exactly with
+the truth file (cycles, formation times, malformed-line count, distinct edges) on three
+seeds. `test_realistic_log_matches_ground_truth` checks the Spark detector against it on
+every run.
+**Known simplification:** a process may wait on several resources at once (the AND request
+model), because hubs and thetas need it. There are no release events, matching the log format.
 
 ---
 
