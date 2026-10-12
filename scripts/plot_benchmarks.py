@@ -4,7 +4,9 @@
     python scripts/plot_benchmarks.py
 
 Each point is the median of the runs for that engine, log and core count; only
-runs that finished and matched the ground truth are plotted.
+runs that finished and matched the ground truth are plotted. Spark runs use 16
+partitions throughout; the first core sweep (partitions = 2 x cores) is left out
+because it changed two things at once (BENCHMARKS.md §4).
 """
 
 import csv
@@ -34,6 +36,8 @@ def load():
     groups, failed = defaultdict(list), {}
     with open(ROOT / "benchmarks" / "results.csv") as f:
         for row in csv.DictReader(f):
+            if row["partitions"] not in ("", "16"):
+                continue
             key = (row["engine"], int(row["lines"]), int(row["cores"]))
             if row["status"] == "ok" and row["correct"] == "True":
                 groups[key].append(float(row["wall_s"]))
@@ -55,7 +59,8 @@ def style(ax, fig, t):
 
 
 def human(n):
-    return f"{n / 1e6:g}M" if n >= 1e6 else f"{n / 1e3:g}k"
+    """Nominal size: 200,037 -> '0.2M', 20,003,350 -> '20M'."""
+    return f"{round(n / 1e6, 1):g}M"
 
 
 def size_sweep(medians, failed, t, path):
@@ -69,8 +74,12 @@ def size_sweep(medians, failed, t, path):
         xs, ys = zip(*pts)
         ax.plot(xs, ys, color=t[engine], linewidth=2, marker="o", markersize=5,
                 markeredgecolor=t["surface"], markeredgewidth=1.5, label=LABELS[engine])
-        ax.annotate(LABELS[engine] + ("" if engine == "baseline" else " (8 cores)"), (xs[-1], ys[-1]),
-                    xytext=(6, 0), textcoords="offset points", va="center", fontsize=8.5, color=t["text"])
+        if engine == "baseline":  # its line stops early; label its first point, where the plot is empty
+            ax.annotate(LABELS[engine], (xs[0], ys[0]), xytext=(10, -2), textcoords="offset points",
+                        va="center", fontsize=8.5, color=t["text"])
+        else:
+            ax.annotate(LABELS[engine] + " (8 cores)", (xs[-1], ys[-1]), xytext=(6, 0),
+                        textcoords="offset points", va="center", fontsize=8.5, color=t["text"])
         for (e, n, c), status in failed.items():
             if e == engine and c == cores:
                 ax.plot([n], [ys[-1]], marker="x", markersize=9, markeredgewidth=2, color=t[engine])
@@ -80,6 +89,7 @@ def size_sweep(medians, failed, t, path):
     ax.set_yscale("log")
     xs = sorted({n for (_, n, _) in medians})
     ax.set_xticks(xs, [human(x) for x in xs])
+    ax.set_yticks([3, 10, 30, 100, 300], ["3", "10", "30", "100", "300"])
     ax.minorticks_off()
     ax.set_xlabel("log lines (realistic generator, ~2% of processes deadlocked)", color=t["muted"], fontsize=9)
     ax.set_ylabel("end-to-end wall time, seconds (median of 3)", color=t["muted"], fontsize=9)
